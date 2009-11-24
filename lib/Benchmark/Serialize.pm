@@ -9,11 +9,11 @@ Benchmark::Serialize - Benchmarks of serialization modules
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -74,6 +74,8 @@ The following tags are supported
 
 =item :yaml    - YAML modules
 
+=item :xml     - XML formats
+
 =back
 
 =cut
@@ -98,6 +100,11 @@ my $benchmarks = {
         deflate  => sub { Convert::Bencode_XS::bencode($_[0])    },
         inflate  => sub { Convert::Bencode_XS::bdecode($_[0])    }
     },
+    'Data::asXML' => {
+        deflate  => sub { Data::asXML->new(pretty=>0)->encode($_[0])->toString },
+        inflate  => sub { Data::asXML->new(pretty=>0)->decode($_[0]) },
+        xml      => 1,
+    },
     'Data::Dumper' => {
         deflate  => sub { Data::Dumper->Dump([ $_[0] ])          },
         inflate  => sub { my $VAR1; eval $_[0]                   },
@@ -107,6 +114,7 @@ my $benchmarks = {
     'Data::Taxi' => {
         deflate  => sub { Data::Taxi::freeze($_[0])              },
         inflate  => sub { Data::Taxi::thaw($_[0])                },
+        xml      => 1,
     },
     'FreezeThaw' => {
         deflate  => sub { FreezeThaw::freeze($_[0])              },
@@ -135,10 +143,15 @@ my $benchmarks = {
         deflate  => sub { PHP::Serialization::serialize($_[0])   },
         inflate  => sub { PHP::Serialization::unserialize($_[0]) }
     },
+    'PHP::Serialization::XS' => {
+        deflate  => sub { PHP::Serialization::XS::serialize($_[0])   },
+        inflate  => sub { PHP::Serialization::XS::unserialize($_[0]) }
+    },
     'RPC::XML' => {
         deflate  => sub { RPC::XML::response->new($_[0])->as_string         },
         inflate  => sub { RPC::XML::ParserFactory->new->parse($_[0])->value },
-        packages => ['RPC::XML', 'RPC::XML::ParserFactory']
+        packages => ['RPC::XML', 'RPC::XML::ParserFactory'],
+        xml      => 1,
     },
     'YAML::Old' => {
         deflate  => sub { YAML::Old::Dump($_[0])                 },
@@ -161,8 +174,14 @@ my $benchmarks = {
     'XML::Simple' => {
         deflate  => sub { XML::Simple::XMLout($_[0])             },
         inflate  => sub { XML::Simple::XMLin($_[0])              },
-        default  => 1
-    }
+        default  => 1,
+        xml      => 1,
+    },
+    'XML::TreePP' => {
+        deflate => sub { XML::TreePP->new()->write( $_[0] )      },
+        inflate => sub { XML::TreePP->new()->parse( $_[0] )      },
+        xml     => 1,
+    },
 };
 
 our $benchmark_deflate  = 1;       # boolean
