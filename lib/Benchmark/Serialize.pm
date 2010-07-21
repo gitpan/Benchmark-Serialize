@@ -9,11 +9,11 @@ Benchmark::Serialize - Benchmarks of serialization modules
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -132,7 +132,19 @@ my $benchmarks = {
         inflate  => sub { JSON::XS::decode_json($_[0])           },
         default  => 1,
         json     => 1
-    },    
+    },
+    'JSON::XS,pretty' => {
+        deflate  => sub { $_[1]->encode( $_[0] ) },
+        inflate  => sub { $_[1]->decode( $_[0] ) },
+        args     => sub { JSON::XS->new->pretty(1)->canonical(1) },
+        json     => 1,
+        packages => ['JSON::XS'],
+    },
+    'JSON::DWIW' => {
+        deflate  => sub { JSON::DWIW->to_json($_[0])             },
+        inflate  => sub { JSON::DWIW::deserialize($_[0])         },
+        json     => 1,
+    },
     'Storable' => {
         deflate  => sub { Storable::nfreeze($_[0])               },
         inflate  => sub { Storable::thaw($_[0])                  },
@@ -225,8 +237,11 @@ sub cmpthese {
 
         my $benchmark = $benchmark{$name};
         my @packages  = ( exists($benchmark->{packages}) ? @{ $benchmark->{packages} } : $name );
-
+        
         $_->require or next BENCHMARK for @packages;
+
+        $benchmark->{args} = [ $benchmark->{args}->() ] if exists $benchmark->{args}
+                                                        && ref $benchmark->{args} eq "CODE";
 
         printf( "%-${width}s : %s\n", $packages[0], $packages[0]->VERSION );
 
@@ -236,7 +251,7 @@ sub cmpthese {
         $results->{inflate}->{$name} = timeit_inflate( $iterations, $structure, $benchmark )
             if $benchmark_inflate;
 
-        $results->{size}->{$name}    = length( $benchmark->{deflate}->($structure) );
+        $results->{size}->{$name}    = length( $benchmark->{deflate}->($structure, @{ $benchmark->{args} } ) );
     }
 
     output( 'Sizes', "size", $output, $results->{size}, $width )
@@ -357,14 +372,14 @@ sub size_list {
 sub timeit_deflate {
     my ( $iterations, $structure, $benchmark ) = @_;
     my $deflate = $benchmark->{deflate};
-    return Benchmark::timethis( $iterations, sub { &$deflate($structure) }, '', 'none' );
+    return Benchmark::timethis( $iterations, sub { &$deflate($structure, @{ $benchmark->{args}}) }, '', 'none' );
 }
 
 sub timeit_inflate {
     my ( $iterations, $structure, $benchmark ) = @_;
     my $inflate = $benchmark->{inflate};
-    my $deflated = $benchmark->{deflate}->($structure);
-    return Benchmark::timethis( $iterations, sub { &$inflate($deflated)  }, '', 'none' );
+    my $deflated = $benchmark->{deflate}->($structure, @{ $benchmark->{args} });
+    return Benchmark::timethis( $iterations, sub { &$inflate($deflated, @{ $benchmark->{args} }) }, '', 'none' );
 }
 
 sub width {
