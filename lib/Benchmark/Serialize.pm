@@ -9,11 +9,11 @@ Benchmark::Serialize - Benchmarks of serialization modules
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 SYNOPSIS
 
@@ -115,6 +115,15 @@ my $benchmarks = {
         deflate  => sub { Data::Taxi::freeze($_[0])              },
         inflate  => sub { Data::Taxi::thaw($_[0])                },
         xml      => 1,
+    },
+    'Data::Pond' => {
+        deflate  => sub { Data::Pond::pond_write_datum($_[0])    },
+        inflate  => sub { Data::Pond::pond_read_datum($_[0])     },
+    },
+    'Data::Pond,eval' => {
+        deflate  => sub { Data::Pond::pond_write_datum($_[0])    },
+        inflate  => sub { eval($_[0])                            },
+        packages => ['Data::Pond'],
     },
     'FreezeThaw' => {
         deflate  => sub { FreezeThaw::freeze($_[0])              },
