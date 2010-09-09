@@ -9,11 +9,11 @@ Benchmark::Serialize - Benchmarks of serialization modules
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -112,6 +112,10 @@ my $benchmarks = {
         default  => 1,
         core     => 1,
     },
+    'Data::MessagePack' => {
+        deflate  => sub { Data::MessagePack->pack($_[0])         },
+        inflate  => sub { Data::MessagePack->unpack($_[0])       },
+    },
     'Data::Taxi' => {
         deflate  => sub { Data::Taxi::freeze($_[0])              },
         inflate  => sub { Data::Taxi::thaw($_[0])                },
@@ -146,7 +150,7 @@ my $benchmarks = {
     'JSON::XS,pretty' => {
         deflate  => sub { $_[1]->encode( $_[0] ) },
         inflate  => sub { $_[1]->decode( $_[0] ) },
-        args     => sub { JSON::XS->new->pretty(1)->canonical(1) },
+        args     => sub { JSON::XS->new->pretty(1)->allow_blessed(1)->convert_blessed(1)->canonical(1) },
         json     => 1,
         packages => ['JSON::XS'],
     },
@@ -253,8 +257,15 @@ sub cmpthese {
         $benchmark->{args} = [ $benchmark->{args}->() ] if exists $benchmark->{args}
                                                         && ref $benchmark->{args} eq "CODE";
 
-        my $deflated = $benchmark->{deflate}->($structure, @{ $benchmark->{args} } );
-        my $inflated = $benchmark->{inflate}->($deflated,  @{ $benchmark->{args} } );
+        my ($deflated, $inflated);
+        eval {
+            $deflated = $benchmark->{deflate}->($structure, @{ $benchmark->{args} } );
+            $inflated = $benchmark->{inflate}->($deflated,  @{ $benchmark->{args} } );
+            1;
+        } or do {
+            warn "Benchmark $name died with:\n    $@\n";
+            next BENCHMARK;
+        };
 
         printf( "%-${width}s : %8s %s\n", $packages[0], $packages[0]->VERSION, 
                     eq_deeply($inflated, $structure) ? "Identity transformation" : "Changes representation" );
@@ -271,10 +282,10 @@ sub cmpthese {
     output( 'Sizes', "size", $output, $results->{size}, $width )
         if $benchmark_size;
 
-    output( 'Deflate', "time", $output, $results->{deflate}, $width )
+    output( 'Deflate (perl -> serialized)', "time", $output, $results->{deflate}, $width )
         if $benchmark_deflate;
 
-    output( 'Inflate', "time", $output, $results->{inflate}, $width )
+    output( 'Inflate (serialized -> perl)', "time", $output, $results->{inflate}, $width )
         if $benchmark_inflate;
 }
 
