@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Benchmark-Serialize
-version:            0.07
+version:            0.08
 abstract:           Benchmarks of serialization modules
 author:
     - Peter Makholm <peter@makholm.net>

@@ -9,11 +9,11 @@ Benchmark::Serialize - Benchmarks of serialization modules
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 =head1 SYNOPSIS
 
@@ -33,6 +33,11 @@ This module encapsulates some basic benchmarks to help you choose a module
 for serializing data. Note that using this module is only a part of chosing a
 serialization format. Other factors than the benchmarked might be of
 relevance!
+
+Included is support for 24 different serialization modules. Also supported
+is the Data::Serializer wrapper providing a unified interface for
+serialization and some extra features. Benchmarking of specialized modules
+made with Protocol Buffers for Perl/XS (protobuf-perlxs) is also available.
 
 =head2 Functions
 
@@ -82,199 +87,58 @@ The following tags are supported
 
 use Benchmark          qw[timestr];
 use Test::Deep::NoTest;
-use UNIVERSAL::require qw[];
+
+use Benchmark::Serialize::Library;
 
 use Exporter qw(import);
 our @EXPORT_OK   = qw( cmpthese );
 our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
-my $benchmarks = {
-    'Bencode' => {
-        deflate  => sub { Bencode::bencode($_[0])                },
-        inflate  => sub { Bencode::bdecode($_[0])                }
-    },    
-    'Convert::Bencode' => {
-        deflate  => sub { Convert::Bencode::bencode($_[0])       },
-        inflate  => sub { Convert::Bencode::bdecode($_[0])       }
-    },
-    'Convert::Bencode_XS' => {
-        deflate  => sub { Convert::Bencode_XS::bencode($_[0])    },
-        inflate  => sub { Convert::Bencode_XS::bdecode($_[0])    }
-    },
-    'Data::asXML' => {
-        deflate  => sub { Data::asXML->new(pretty=>0)->encode($_[0])->toString },
-        inflate  => sub { Data::asXML->new(pretty=>0)->decode($_[0]) },
-        xml      => 1,
-    },
-    'Data::Dumper' => {
-        deflate  => sub { Data::Dumper->Dump([ $_[0] ])          },
-        inflate  => sub { my $VAR1; eval $_[0]                   },
-        default  => 1,
-        core     => 1,
-    },
-    'Data::MessagePack' => {
-        deflate  => sub { Data::MessagePack->pack($_[0])         },
-        inflate  => sub { Data::MessagePack->unpack($_[0])       },
-    },
-    'Data::Taxi' => {
-        deflate  => sub { Data::Taxi::freeze($_[0])              },
-        inflate  => sub { Data::Taxi::thaw($_[0])                },
-        xml      => 1,
-    },
-    'Data::Pond' => {
-        deflate  => sub { Data::Pond::pond_write_datum($_[0])    },
-        inflate  => sub { Data::Pond::pond_read_datum($_[0])     },
-    },
-    'Data::Pond,eval' => {
-        deflate  => sub { Data::Pond::pond_write_datum($_[0])    },
-        inflate  => sub { eval($_[0])                            },
-        packages => ['Data::Pond'],
-    },
-    'FreezeThaw' => {
-        deflate  => sub { FreezeThaw::freeze($_[0])              },
-        inflate  => sub { FreezeThaw::thaw($_[0])                },
-        default  => 1
-    },
-    'JSON::PP' => {
-        deflate  => sub { JSON::PP::encode_json($_[0])           },
-        inflate  => sub { JSON::PP::decode_json($_[0])           },
-        default  => 1,
-        json     => 1
-    },
-    'JSON::XS' => {
-        deflate  => sub { JSON::XS::encode_json($_[0])           },
-        inflate  => sub { JSON::XS::decode_json($_[0])           },
-        default  => 1,
-        json     => 1
-    },
-    'JSON::XS,pretty' => {
-        deflate  => sub { $_[1]->encode( $_[0] ) },
-        inflate  => sub { $_[1]->decode( $_[0] ) },
-        args     => sub { JSON::XS->new->pretty(1)->allow_blessed(1)->convert_blessed(1)->canonical(1) },
-        json     => 1,
-        packages => ['JSON::XS'],
-    },
-    'JSON::DWIW' => {
-        deflate  => sub { JSON::DWIW->to_json($_[0])             },
-        inflate  => sub { JSON::DWIW::deserialize($_[0])         },
-        json     => 1,
-    },
-    'Storable' => {
-        deflate  => sub { Storable::nfreeze($_[0])               },
-        inflate  => sub { Storable::thaw($_[0])                  },
-        default  => 1,
-        core     => 1,
-    },
-    'PHP::Serialization' => {
-        deflate  => sub { PHP::Serialization::serialize($_[0])   },
-        inflate  => sub { PHP::Serialization::unserialize($_[0]) }
-    },
-    'PHP::Serialization::XS' => {
-        deflate  => sub { PHP::Serialization::XS::serialize($_[0])   },
-        inflate  => sub { PHP::Serialization::XS::unserialize($_[0]) }
-    },
-    'RPC::XML' => {
-        deflate  => sub { RPC::XML::response->new($_[0])->as_string         },
-        inflate  => sub { RPC::XML::ParserFactory->new->parse($_[0])->value },
-        packages => ['RPC::XML', 'RPC::XML::ParserFactory'],
-        xml      => 1,
-    },
-    'YAML::Old' => {
-        deflate  => sub { YAML::Old::Dump($_[0])                 },
-        inflate  => sub { YAML::Old::Load($_[0])                 },
-        default  => 1,
-        yaml     => 1
-    },
-    'YAML::XS' => {
-        deflate  => sub { YAML::XS::Dump($_[0])                  },
-        inflate  => sub { YAML::XS::Load($_[0])                  },
-        default  => 1,
-        yaml     => 1
-    },
-    'YAML::Tiny' => {
-        deflate  => sub { YAML::Tiny::Dump($_[0])                },
-        inflate  => sub { YAML::Tiny::Load($_[0])                },
-        default  => 1,
-        yaml     => 1
-    },
-    'XML::Simple' => {
-        deflate  => sub { XML::Simple::XMLout($_[0])             },
-        inflate  => sub { XML::Simple::XMLin($_[0])              },
-        default  => 1,
-        xml      => 1,
-    },
-    'XML::TreePP' => {
-        deflate => sub { XML::TreePP->new()->write( $_[0] )      },
-        inflate => sub { XML::TreePP->new()->parse( $_[0] )      },
-        xml     => 1,
-    },
-};
-
 our $benchmark_deflate  = 1;       # boolean
 our $benchmark_inflate  = 1;       # boolean
+our $benchmark_roundtrip= 1;       # boolean
 our $benchmark_size     = 1;       # boolean
+our $verbose            = 0;       # boolean
 our $output             = 'chart'; # chart or list
 
 sub cmpthese {
     my $iterations = shift;
     my $structure  = shift;
-    my %benchmark;
-    for my $spec (@_) {
-        if ( ref $spec eq "HASH" ) {
-            $benchmark{ $spec->{name} } = $spec; 
+    my @benchmarks = Benchmark::Serialize::Library->load( @_ );
 
-        } elsif ( $spec eq "all" or $spec eq ":all" ) {
-            $benchmark { $_ } = $benchmarks->{ $_ } for keys %{ $benchmarks };
-        
-        } elsif ( $spec eq "default" ) {
-            $benchmark{ $_ } = $benchmarks->{ $_ } for grep { $benchmarks->{ $_ }->{default} } keys %{ $benchmarks };
-        
-        } elsif ( $spec =~ /^:(.*)/ ) {
-            $benchmark{ $_ } = $benchmarks->{ $_ } for grep { $benchmarks->{ $_ }->{$1} } keys %{ $benchmarks };
-        
-        } elsif ( exists $benchmarks->{ $spec } ) {
-            $benchmark{ $spec } = $benchmarks->{ $spec }
-        
-        } else {
-            warn "Unknown benchmark '$spec'.";
-        }
-    }
-
-    my $width   = width(keys %benchmark);
+    my $width   = width(map { $_->name } @benchmarks);
     my $results = { };
 
     print "\nModules\n";
 
     BENCHMARK:
 
-    foreach my $name ( sort keys %benchmark ) {
-
-        my $benchmark = $benchmark{$name};
-        my @packages  = ( exists($benchmark->{packages}) ? @{ $benchmark->{packages} } : $name );
-        
-        $_->require or next BENCHMARK for @packages;
-
-        $benchmark->{args} = [ $benchmark->{args}->() ] if exists $benchmark->{args}
-                                                        && ref $benchmark->{args} eq "CODE";
+    foreach my $benchmark ( sort { $a->name cmp $b->name } @benchmarks ) {
+	my $name = $benchmark->name;
 
         my ($deflated, $inflated);
         eval {
-            $deflated = $benchmark->{deflate}->($structure, @{ $benchmark->{args} } );
-            $inflated = $benchmark->{inflate}->($deflated,  @{ $benchmark->{args} } );
+            $deflated = $benchmark->deflate($structure);
+            $inflated = $benchmark->inflate($deflated);
             1;
         } or do {
             warn "Benchmark $name died with:\n    $@\n";
             next BENCHMARK;
         };
+    
+        my ($likeliness, $diag) = likeliness( $inflated, $structure );
+        printf( "%-${width}s : %8s %s\n", $benchmark->name, $benchmark->version, $likeliness);
 
-        printf( "%-${width}s : %8s %s\n", $packages[0], $packages[0]->VERSION, 
-                    eq_deeply($inflated, $structure) ? "Identity transformation" : "Changes representation" );
+        print Test::Deep::deep_diag($diag), "\n" if defined($diag) and $Benchmark::Serialize::verbose;
 
         $results->{deflate}->{$name} = timeit_deflate( $iterations, $structure, $benchmark )
             if $benchmark_deflate;
 
         $results->{inflate}->{$name} = timeit_inflate( $iterations, $structure, $benchmark )
             if $benchmark_inflate;
+
+        $results->{roundtrip}->{$name} = timeit_roundtrip( $iterations, $structure, $benchmark )
+            if $benchmark_roundtrip;
 
         $results->{size}->{$name}    = length( $deflated );
     }
@@ -287,6 +151,9 @@ sub cmpthese {
 
     output( 'Inflate (serialized -> perl)', "time", $output, $results->{inflate}, $width )
         if $benchmark_inflate;
+
+    output( 'Roundtrip', "time", $output, $results->{roundtrip}, $width )
+        if $benchmark_roundtrip;
 }
 
 sub output {
@@ -396,19 +263,41 @@ sub size_list {
 
 sub timeit_deflate {
     my ( $iterations, $structure, $benchmark ) = @_;
-    my $deflate = $benchmark->{deflate};
-    return Benchmark::timethis( $iterations, sub { &$deflate($structure, @{ $benchmark->{args}}) }, '', 'none' );
+    return Benchmark::timethis( $iterations, sub { $benchmark->deflate($structure) }, '', 'none' );
 }
 
 sub timeit_inflate {
     my ( $iterations, $structure, $benchmark ) = @_;
-    my $inflate = $benchmark->{inflate};
-    my $deflated = $benchmark->{deflate}->($structure, @{ $benchmark->{args} });
-    return Benchmark::timethis( $iterations, sub { &$inflate($deflated, @{ $benchmark->{args} }) }, '', 'none' );
+    my $deflated = $benchmark->deflate($structure);
+    return Benchmark::timethis( $iterations, sub { $benchmark->inflate($deflated) }, '', 'none' );
+}
+
+sub timeit_roundtrip {
+    my ( $iterations, $structure, $benchmark ) = @_;
+    return Benchmark::timethis( $iterations, sub { $benchmark->inflate( $benchmark->deflate( $structure )) }, '', 'none' );
 }
 
 sub width {
     return length( ( sort { length $a <=> length $b } @_ )[-1] );
+}
+
+sub likeliness {
+    my ($got, $expected) = @_;
+    my ($ok, $diag);
+
+    ($ok, $diag) = Test::Deep::cmp_details( $got, $expected );
+    return ("Identical", undef) if $ok;
+
+    ($ok, $diag) = Test::Deep::cmp_details( $got, noclass($expected) );
+    return ("Changes blessing", undef) if $ok;
+
+    ($ok, $diag) = Test::Deep::cmp_details( $got, noclass(superhashof $expected) );
+    return ("Adds content", undef) if $ok;
+
+    ($ok, $diag) = Test::Deep::cmp_details( $got, noclass(subhashof $expected) );
+    return ("Removes content", undef) if $ok;
+
+    return ("Changes content", $diag);
 }
 
 =head1 RESULTS
